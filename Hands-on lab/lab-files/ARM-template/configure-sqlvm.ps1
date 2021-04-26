@@ -1,3 +1,7 @@
+param (
+    [Parameter(Mandatory=$False)] [string] $SqlPass = ""
+)
+
 # Disable Internet Explorer Enhanced Security Configuration
 function Disable-InternetExplorerESC {
     $AdminKey = "HKLM:\SOFTWARE\Microsoft\Active Setup\Installed Components\{A509B1A7-37EF-4b3f-8CFC-4F3A74704073}"
@@ -35,29 +39,39 @@ function Add-SqlFirewallRule {
 
 Add-SqlFirewallRule
 
+#download .net 4.8
+Start-BitsTransfer -Source 'https://go.microsoft.com/fwlink/?linkid=2088631'  -Destination "$Env:Temp\Net4.8.exe"; 
+
+#install .net 4.8
+start-process "$Env:Temp\Net4.8.exe" -args "/q /norestart" -wait
+
 # Download and install Data Mirgation Assistant
-Invoke-WebRequest 'https://download.microsoft.com/download/C/6/3/C63D8695-CEF2-43C3-AF0A-4989507E429B/DataMigrationAssistant.msi' -OutFile 'C:\DataMigrationAssistant.msi'
+(New-Object System.Net.WebClient).DownloadFile('https://download.microsoft.com/download/C/6/3/C63D8695-CEF2-43C3-AF0A-4989507E429B/DataMigrationAssistant.msi', 'C:\DataMigrationAssistant.msi')
 Start-Process -file 'C:\DataMigrationAssistant.msi' -arg '/qn /l*v C:\dma_install.txt' -passthru | wait-process
 
-# Download and unzip the database backup file from the GitHub repo
-Invoke-WebRequest 'https://raw.githubusercontent.com/microsoft/MCW-App-modernization/master/Hands-on%20lab/lab-files/Database/ContosoInsurance.zip' -OutFile 'C:\ContosoInsurance.zip'
-Expand-Archive -LiteralPath 'C:\ContosoInsurance.zip' -DestinationPath 'C:\ContosoInsurance' -Force
-Add-Type -AssemblyName System.IO.Compression.FileSystem
-[System.IO.Compression.ZipFile]::ExtractToDirectory('C:\ContosoInsurance.zip','C:\ContosoInsurance')
-
 # Attach the downloaded backup files to the local SQL Server instance
-function Attach-SqlDatabase {
+function Setup-Sql {
     #Add snap-in
     Add-PSSnapin SqlServerCmdletSnapin* -ErrorAction SilentlyContinue
 
     $ServerName = 'SQLSERVER2008'
-    $DatabaseName = 'ContosoInsurance'
-    $FilePath = 'C:\ContosoInsurance\'
-    $MdfFileName = $FilePath + 'ContosoInsurance.mdf'
-    $LdfFileName = $FilePath + 'ContosoInsurance_log.ldf'
+    $DatabaseName = 'PartsUnlimited'
     
-    $AttachCmd = "USE [master] CREATE DATABASE [$DatabaseName] ON (FILENAME ='$MdfFileName'),(FILENAME = '$LdfFileName') for ATTACH"
-    Invoke-Sqlcmd $AttachCmd -QueryTimeout 3600 -ServerInstance $ServerName
+    $Cmd = "USE [master] CREATE DATABASE [$DatabaseName]"
+    Invoke-Sqlcmd $Cmd -QueryTimeout 3600 -ServerInstance $ServerName
+
+    Invoke-Sqlcmd "ALTER DATABASE [$DatabaseName] SET DISABLE_BROKER;" -QueryTimeout 3600 -ServerInstance $ServerName
+    
+    Invoke-Sqlcmd "CREATE LOGIN PUWebSite WITH PASSWORD = '$SqlPass';" -QueryTimeout 3600 -ServerInstance $ServerName
+    Invoke-Sqlcmd "USE [$DatabaseName];CREATE USER PUWebSite FOR LOGIN [PUWebSite];EXEC sp_addrolemember 'db_owner', 'PUWebSite'; " -QueryTimeout 3600 -ServerInstance $ServerName
+
+    Invoke-Sqlcmd "EXEC sp_addsrvrolemember @loginame = N'PUWebSite', @rolename = N'sysadmin';" -QueryTimeout 3600 -ServerInstance $ServerName
+
+    Invoke-Sqlcmd "EXEC xp_instance_regwrite N'HKEY_LOCAL_MACHINE', N'Software\Microsoft\MSSQLServer\MSSQLServer', N'LoginMode', REG_DWORD, 2" -QueryTimeout 3600 -ServerInstance $ServerName
+
+    Restart-Service -Force MSSQLSERVER
+    #In case restart failed but service was shut down.
+    Start-Service -Name 'MSSQLSERVER' 
 }
 
-Attach-SqlDatabase
+Setup-Sql

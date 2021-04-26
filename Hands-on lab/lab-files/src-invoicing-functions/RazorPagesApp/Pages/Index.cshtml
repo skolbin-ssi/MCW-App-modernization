@@ -1,0 +1,67 @@
+﻿@page
+@model IndexModel
+
+<div class="text-center">
+  @* <h1 class="display-4"><img class="logo" src="img/functions.svg" /> Invoice</h1> *@
+
+  <div class="logo">
+    <img class="logo" src="img/logo.png" />
+  </div>
+  @if (Model.Items == null)
+  {
+    <div>
+      <form id="invoice-form" method="post">
+        <textarea name="items" id="items-box"></textarea>
+        <textarea name="customerInfo" id="customerInfo-box"></textarea>
+        <input type="submit" id="submit-button" value="Submit" />
+      </form>
+    </div>
+  }
+  else
+  {
+    <div>
+      <div style="margin-bottom: 48px;" class="row">
+        <div class="column" style="text-align: left;">
+          @Model.orderInformation.Name<br/>
+          @Model.orderInformation.Address<br/>
+          @Model.orderInformation.City, @Model.orderInformation.State, @Model.orderInformation.PostalCode<br/>
+          @Model.orderInformation.Country<br/>
+        </div>
+        <div class="column" style="text-align: right;">
+          Order Id: @Model.orderInformation.OrderID<br/>
+          Date: @Model.orderInformation.OrderDate<br/>
+        </div>
+      </div>
+      <table class="table">
+        <thead>
+          <tr>
+            <td>Item #</td>
+            <td>Name</td>
+            <td>Price</td>
+            <td>Quantity</td>
+            <td>Line Total</td>
+          </tr>
+        </thead>
+        <tbody>
+          @foreach(var item in Model.Items)
+          {
+            <tr>
+              <td>@item.ProductId</td>
+              <td>@item.Name</td>
+              <td>@item.UnitPrice.ToString("F2")</td>
+              <td>@item.Quantity</td>
+              <td>@((item.UnitPrice * item.Quantity).ToString("F2"))</td>
+            </tr>
+          }
+          <tr>
+            <td colspan="4"></td>
+            <td><b>@(Model.Items
+                    .Select(i => i.UnitPrice * i.Quantity)
+                    .Sum()
+                    .ToString("F2"))</b></td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+  }
+</div>

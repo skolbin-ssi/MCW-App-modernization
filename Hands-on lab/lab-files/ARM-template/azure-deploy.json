@@ -1,9 +1,9 @@
 {
-    "$schema": "http://schema.management.azure.com/schemas/2015-01-01/deploymentTemplate.json#",
+    "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
     "contentVersion": "1.2.0.0",
     "parameters": {
         "sqlServerName": {
-            "defaultValue": "contosoinsurance",
+            "defaultValue": "parts",
             "type": "string",
             "maxLength": 25,
             "metadata": {
@@ -25,26 +25,21 @@
             "metadata": {
                 "description": "The password must be between 8 and 128 characters in length and must contain at least one number, one non-alphanumeric character, and one upper or lower case letter. Default value is Password.1!!"
             }
-        },
-        "apiManagementEmail": {
-            "type": "string",
-            "metadata": {
-                "description": "Enter the email address to use for API Management admin notifications."
-            }
         }
     },
     "variables": {
+		"githubBranchName": "main",
         "location": "[resourceGroup().location]",
-        "databaseName": "ContosoInsurance",
+        "databaseName": "parts",
         "uniqueSqlServerName": "[concat(parameters('sqlServerName'), '-', uniqueString(resourceGroup().id))]",
-        "storageAccountName": "[concat('contoso', uniqueString(resourceGroup().id))]",
-
+        "storageAccountName": "[concat('parts', uniqueString(resourceGroup().id))]",
+        
         "virtualMachineSize": "Standard_D2s_v3",
 
-        "jbVirtualMachineName": "LabVM",
-        "jbNetworkSecurityGroupName": "[concat(variables('jbVirtualMachineName'), '-nsg')]",
-        "jbNetworkInterfaceName": "[concat(variables('jbVirtualMachineName'), '-nic')]",
-        "jbPublicIpAddressName": "[concat(variables('jbVirtualMachineName'), '-ip')]",
+        "webVirtualMachineName": "WebVM",
+        "webNetworkSecurityGroupName": "[concat(variables('webVirtualMachineName'), '-nsg')]",
+        "webNetworkInterfaceName": "[concat(variables('webVirtualMachineName'), '-nic')]",
+        "webPublicIpAddressName": "[concat(variables('webVirtualMachineName'), '-ip')]",
 
         "sqlVirtualMachineName": "SqlServer2008",
         "sqlNetworkSecurityGroupName": "[concat(variables('sqlVirtualMachineName'), '-nsg')]",
@@ -56,20 +51,14 @@
         "subnetName": "default",
         "subnetPrefix": "176.16.0.0/24",
 
-        "jbCustomScriptFileName": "configure-labvm.ps1",
-        "jbCustomScriptUri": "[concat('https://raw.githubusercontent.com/microsoft/MCW-App-modernization/master/Hands-on%20lab/lab-files/ARM-template/', variables('jbCustomScriptFileName'))]",
+        "webCustomScriptFileName": "configure-webvm.ps1",
+        "webCustomScriptUri": "[concat('https://raw.githubusercontent.com/microsoft/MCW-App-modernization/', variables('githubBranchName'),'/Hands-on%20lab/lab-files/ARM-template/', variables('webCustomScriptFileName'))]",
         "sqlCustomScriptFileName": "configure-sqlvm.ps1",
-        "sqlCustomScriptUri": "[concat('https://raw.githubusercontent.com/microsoft/MCW-App-modernization/master/Hands-on%20lab/lab-files/ARM-template/', variables('sqlCustomScriptFileName'))]",
+        "sqlCustomScriptUri": "[concat('https://raw.githubusercontent.com/microsoft/MCW-App-modernization/', variables('githubBranchName'),'/Hands-on%20lab/lab-files/ARM-template/', variables('sqlCustomScriptFileName'))]",
 
-        "dmsName": "[concat('contoso-dms-', uniqueString(resourceGroup().id))]",
-        "appServicePlanName": "[concat(resourceGroup().name, '-asp')]",
-        "apiAppName": "[concat('contoso-api-', uniqueString(resourceGroup().id))]",
-        "webAppName": "[concat('contoso-web-', uniqueString(resourceGroup().id))]",
-        "functionAppName": "[concat('contoso-func-', uniqueString(resourceGroup().id))]",
-        "apiManagementName": "[concat('contoso-apim-', uniqueString(resourceGroup().id))]",
-        "searchServiceName": "[concat('contoso-search-', uniqueString(resourceGroup().id))]",
-        "cogServicesName": "[concat('cog-services-', uniqueString(resourceGroup().id))]",
-        "keyVaultName": "[concat('contoso-kv-', uniqueString(resourceGroup().id))]"
+        "dmsName": "[concat('parts-dms-', uniqueString(resourceGroup().id))]",
+        "hostingPlanName": "[concat(resourceGroup().name, '-asp-ln-fn')]",
+		"functionAppName": "[concat('parts-func-', uniqueString(resourceGroup().id))]"
     },
     "resources": [
         {
@@ -92,12 +81,13 @@
             }
         },
         {
-            "name": "[variables('jbVirtualMachineName')]",
+            "name": "[variables('webVirtualMachineName')]",
             "type": "Microsoft.Compute/virtualMachines",
             "apiVersion": "2019-03-01",
             "location": "[variables('location')]",
             "dependsOn": [
-                "[concat('Microsoft.Network/networkInterfaces/', variables('jbNetworkInterfaceName'))]"
+                "[concat('Microsoft.Network/networkInterfaces/', variables('webNetworkInterfaceName'))]",
+                "[concat('Microsoft.Network/networkInterfaces/', variables('sqlNetworkInterfaceName'))]"
             ],
             "properties": {
                 "hardwareProfile": {
@@ -111,21 +101,21 @@
                         }
                     },
                     "imageReference": {
-                        "publisher": "microsoftvisualstudio",
-                        "offer": "visualstudio2019latest",
-                        "sku": "vs-2019-comm-latest-ws2019",
+                        "publisher": "microsoftwindowsserver",
+                        "offer": "windowsserverdotnet",
+                        "sku": "ws2019-dotnetcore-2-2",
                         "version": "latest"
                     }
                 },
                 "networkProfile": {
                     "networkInterfaces": [
                         {
-                            "id": "[resourceId('Microsoft.Network/networkInterfaces', variables('jbNetworkInterfaceName'))]"
+                            "id": "[resourceId('Microsoft.Network/networkInterfaces', variables('webNetworkInterfaceName'))]"
                         }
                     ]
                 },
                 "osProfile": {
-                    "computerName": "[variables('jbVirtualMachineName')]",
+                    "computerName": "[variables('webVirtualMachineName')]",
                     "adminUsername": "[parameters('adminUsername')]",
                     "adminPassword": "[parameters('adminPassword')]",
                     "windowsConfiguration": {
@@ -136,7 +126,7 @@
             },
             "resources": [
                 {
-                    "name": "SetupLabVm",
+                    "name": "SetupWebVm",
                     "type": "extensions",
                     "apiVersion": "2019-03-01",
                     "location": "[variables('location')]",
@@ -147,16 +137,16 @@
                         "autoUpgradeMinorVersion": true,
                         "settings": {
                             "fileUris": [
-                                "[variables('jbCustomScriptUri')]"
+                                "[variables('webCustomScriptUri')]"
                             ],
-                            "commandToExecute": "[concat('powershell -ExecutionPolicy Unrestricted -File ', variables('jbCustomScriptFileName'))]"
+                            "commandToExecute": "[concat('powershell -ExecutionPolicy Unrestricted -File ', variables('webCustomScriptFileName'), ' ', reference(resourceId('Microsoft.Network/publicIPAddresses',variables('sqlPublicIpAddressName'))).IpAddress, ' ', parameters('adminPassword'))]"
                         }
                     },
                     "dependsOn": [
-                        "[concat('Microsoft.Compute/virtualMachines/', variables('jbVirtualMachineName'))]"
+                        "[concat('Microsoft.Compute/virtualMachines/', variables('webVirtualMachineName'))]"
                     ],
                     "tags": {
-                        "displayName": "SetupLabVm"
+                        "displayName": "SetupWebVm"
                     }
                 }
             ]
@@ -219,7 +209,7 @@
                             "fileUris": [
                                 "[variables('sqlCustomScriptUri')]"
                             ],
-                            "commandToExecute": "[concat('powershell -ExecutionPolicy Unrestricted -File ', variables('sqlCustomScriptFileName'))]"
+                            "commandToExecute": "[concat('powershell -ExecutionPolicy Unrestricted -File ', variables('sqlCustomScriptFileName'), ' ', parameters('adminPassword'))]"
                         }
                     },
                     "dependsOn": [
@@ -325,73 +315,13 @@
             }
         },
         {
-            "type": "Microsoft.Web/serverfarms",
-            "name": "[variables('appServicePlanName')]",
-            "apiVersion": "2018-02-01",
-            "location": "[variables('location')]",
-            "sku": {
-                "name": "S1",
-                "tier": "Standard",
-                "size": "S1",
-                "family": "S",
-                "capacity": 1
-            },
-            "tags": {
-            },
-            "properties": {
-                "workerSize": 0,
-                "workerSizeId": 0,
-                "numberOfWorkers": 1
-            }
-        },
-        {
-            "type": "Microsoft.Web/sites",
-            "name": "[variables('webAppName')]",
-            "apiVersion": "2018-11-01",
-            "location": "[variables('location')]",
-            "dependsOn": [
-                "[concat('Microsoft.Web/serverfarms/', variables('appServicePlanName'))]"
-            ],
-            "properties": {
-                "enabled": true,
-                "siteConfig": {
-                    "connectionStrings": [
-                    ],
-                    "metadata": [
-                        {
-                            "name": "CURRENT_STACK",
-                            "value": "dotnetcore"
-                        }
-                    ],
-                    "alwaysOn": true
-                },
-                "serverFarmId": "[resourceId('Microsoft.Web/serverfarms/', variables('appServicePlanName'))]"
-            }
-        },
-        {
-            "type": "Microsoft.Web/sites",
-            "name": "[variables('apiAppName')]",
-            "apiVersion": "2018-11-01",
-            "location": "[variables('location')]",
-            "kind": "api",
-            "dependsOn": [
-                "[concat('Microsoft.Web/serverfarms/', variables('appServicePlanName'))]"
-            ],
-            "properties": {
-                "enabled": true,
-                "siteConfig": {
-                    "appSettings": []
-                },
-                "serverFarmId": "[resourceId('Microsoft.Web/serverfarms/', variables('appServicePlanName'))]"
-            }
-        },
-        {
             "type": "Microsoft.Web/sites",
             "name": "[variables('functionAppName')]",
             "apiVersion": "2018-11-01",
             "location": "[variables('location')]",
-            "kind": "functionapp",
+            "kind": "functionapp,linux",
             "dependsOn": [
+                "[resourceId('Microsoft.Web/serverfarms', variables('hostingPlanName'))]",
                 "[resourceId('Microsoft.Storage/storageAccounts', variables('storageAccountName'))]"
             ],
             "properties": {
@@ -408,81 +338,33 @@
                         },
                         {
                             "name": "FUNCTIONS_EXTENSION_VERSION",
-                            "value": "~2"
-                        },
-                        {
-                            "name": "WEBSITE_CONTENTAZUREFILECONNECTIONSTRING",
-                            "value": "[concat('DefaultEndpointsProtocol=https;AccountName=',variables('storageAccountName'),';AccountKey=',listKeys(resourceId('Microsoft.Storage/storageAccounts', variables('storageAccountName')), '2015-05-01-preview').key1)]"
-                        },
-                        {
-                            "name": "WEBSITE_CONTENTSHARE",
-                            "value": "[variables('storageAccountName')]"
+                            "value": "~3"
                         },
                         {
                             "name": "WEBSITE_NODE_DEFAULT_VERSION",
                             "value": "10.14.1"
                         }
-                    ]
+                    ],
+                    "use32BitWorkerProcess": false,
+                    "linuxFxVersion": "dotnet|3.1"
                 },
                 "clientAffinityEnabled": false,
+                "serverFarmId": "[resourceId('Microsoft.Web/serverfarms', variables('hostingPlanName'))]",
                 "reserved": false
             }
         },
-        {
-            "type": "Microsoft.ApiManagement/service",
-            "name": "[variables('apiManagementName')]",
-            "apiVersion": "2019-01-01",
+                {
+            "type": "Microsoft.Web/serverfarms",
+            "apiVersion": "2019-08-01",
+            "name": "[variables('hostingPlanName')]",
             "location": "[variables('location')]",
-            "sku": {
-                "name": "Developer",
-                "capacity": 1
-            },
+            "kind": "linux",
             "properties": {
-                "publisherEmail": "[parameters('apiManagementEmail')]",
-                "publisherName": "Contoso Insurance"
-            }
-        },
-        {
-            "name": "[variables('keyVaultName')]",
-            "type": "Microsoft.KeyVault/vaults",
-            "apiVersion": "2018-02-14",
-            "location": "[variables('location')]",
-            "properties": {
-                "sku": {
-                    "name": "Standard",
-                    "family": "A"
-                },
-                "tenantId": "[subscription().tenantId]",
-                "accessPolicies": []
-            }
-        },
-        {
-            "type": "Microsoft.Search/searchServices",
-            "name": "[variables('searchServiceName')]",
-            "apiVersion": "2015-08-19",
-            "location": "[variables('location')]",
-            "properties": {
-                "replicaCount": 1,
-                "partitionCount": 1,
-                "hostingMode": "Default"
+                "reserved": true
             },
             "sku": {
-                "name": "free"
-            }
-        },
-        {
-            "name": "[variables('cogServicesName')]",
-            "type": "Microsoft.CognitiveServices/accounts",
-            "apiVersion": "2017-04-18",
-            "sku": {
-                "name": "S0"
-            },
-            "location": "[variables('location')]",
-            "kind": "CognitiveServices",
-            "properties": {
-                "apiProperties": {
-                    "statisticsEnabled": false
-                }
+                "Tier": "Dynamic",
+                "Name": "Y1"
             }
         },
         {
@@ -508,14 +390,14 @@
             }
         },
         {
-            "name": "[variables('jbNetworkInterfaceName')]",
+            "name": "[variables('webNetworkInterfaceName')]",
             "type": "Microsoft.Network/networkInterfaces",
             "apiVersion": "2019-04-01",
             "location": "[variables('location')]",
             "dependsOn": [
                 "[concat('Microsoft.Network/virtualNetworks/', variables('virtualNetworkName'))]",
-                "[concat('Microsoft.Network/publicIpAddresses/', variables('jbPublicIpAddressName'))]",
-                "[concat('Microsoft.Network/networkSecurityGroups/', variables('jbNetworkSecurityGroupName'))]"
+                "[concat('Microsoft.Network/publicIpAddresses/', variables('webPublicIpAddressName'))]",
+                "[concat('Microsoft.Network/networkSecurityGroups/', variables('webNetworkSecurityGroupName'))]"
             ],
             "properties": {
                 "ipConfigurations": [
@@ -527,13 +409,13 @@
                             },
                             "privateIPAllocationMethod": "Dynamic",
                             "publicIpAddress": {
-                                "id": "[resourceId('Microsoft.Network/publicIpAddresses', variables('jbPublicIpAddressName'))]"
+                                "id": "[resourceId('Microsoft.Network/publicIpAddresses', variables('webPublicIpAddressName'))]"
                             }
                         }
                     }
                 ],
                 "networkSecurityGroup": {
-                    "id": "[resourceId('Microsoft.Network/networkSecurityGroups', variables('jbNetworkSecurityGroupName'))]"
+                    "id": "[resourceId('Microsoft.Network/networkSecurityGroups', variables('webNetworkSecurityGroupName'))]"
                 }
             }
         },
@@ -568,7 +450,7 @@
             }
         },
         {
-            "name": "[variables('jbPublicIpAddressName')]",
+            "name": "[variables('webPublicIpAddressName')]",
             "type": "Microsoft.Network/publicIPAddresses",
             "apiVersion": "2019-04-01",
             "location": "[variables('location')]",
@@ -585,14 +467,14 @@
             "apiVersion": "2019-04-01",
             "location": "[variables('location')]",
             "properties": {
-                "publicIPAllocationMethod": "Dynamic"
+                "publicIPAllocationMethod": "Static"
             },
             "sku": {
                 "name": "Basic"
             }
         },
         {
-            "name": "[variables('jbNetworkSecurityGroupName')]",
+            "name": "[variables('webNetworkSecurityGroupName')]",
             "type": "Microsoft.Network/networkSecurityGroups",
             "apiVersion": "2019-04-01",
             "location": "[variables('location')]",
@@ -612,7 +494,20 @@
                             "destinationAddressPrefix": "*",
                             "destinationPortRange": "3389"
                         }
-                    }
+                    },
+					{
+						"name": "allow-http",
+						"properties": {
+						"priority": 1001,
+						"sourceAddressPrefix": "*",
+						"protocol": "Tcp",
+						"destinationPortRange": "80",
+						"access": "Allow",
+						"direction": "Inbound",
+						"sourcePortRange": "*",
+						"destinationAddressPrefix": "*"
+						}
+					}
                 ]
             }
         },

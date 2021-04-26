@@ -78,6 +78,6 @@ Once submitted, your report will go into the [issue tracking](https://github.com
 If you are interested in writing code to fix issues,
 please see [How to Contribute](https://github.com/Microsoft/MSW/wiki/How-to-Contribute) in the wiki.
 
-# Thank You!
+# Thank You
 
 Your contributions to open source, large or small, make great projects like this possible. Thank you for taking the time to contribute.
